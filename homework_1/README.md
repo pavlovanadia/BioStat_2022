@@ -20,4 +20,4 @@ The output file is a table in **.csv** format that contains:
 - difference between mean gene expresison in the second cell line and first cell line
 
 ### To run the script correctly please use **python 3** ###
-### This script uses numpy and pandas libraries, so **please install** their versions from the *requirements.txt* file to your virtual environment ###
+### This script uses several libraries, so **please install** their versions from the *requirements.txt* file to your virtual environment ###
