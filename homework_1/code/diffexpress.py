@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import scipy.stats as st
 from statsmodels.stats.weightstats import ztest
+import argparse
 
 
 def check_intervals_intersect(first_ci, second_ci):
@@ -94,3 +95,17 @@ def diffexpr(
     results = pd.DataFrame(results)
     
     results.to_csv(f"{save_results_table}.csv", index=False)
+
+
+parser = argparse.ArgumentParser(description='Differential expression analysis') # created parser
+parser.add_argument('first_inp', type=str, help='Path to first (control) .csv file') # argument for first table
+parser.add_argument('second_inp', type=str, help='Path to second (experiment) .csv file') # argument for second table
+parser.add_argument('output_name', type=str, help='Results table name') # argument for output
+args = parser.parse_args()
+
+# finally let the script do the work
+diffexpr(
+    first_cell_type_expressions_path=args.first_inp,
+    second_cell_type_expressions_path=args.second_inp,
+    save_results_table=args.output_name
+)
