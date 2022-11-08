@@ -3,6 +3,8 @@ import numpy as np
 import scipy.stats as st
 from statsmodels.stats.weightstats import ztest
 import argparse
+import sys
+from statsmodels.stats.multitest import multipletests
 
 
 def check_intervals_intersect(first_ci, second_ci):
@@ -62,50 +64,111 @@ def diff_means(table_1, table_2, gene_names):
     return difference
 
 
+def expression_means(table, gene_names):
+    """calculate the means of each gene expression for one table"""
+
+    expr_means = list()
+
+    for gene in gene_names:
+        expr_means.append(np.mean(table[gene]))
+
+    return expr_means
+
+
 def diffexpr(
     first_cell_type_expressions_path,
     second_cell_type_expressions_path,
-    save_results_table
+    save_results_table,
+    need_ci,
+    need_adj,
+    adj_method,
+    adj_alpha
     ):
     
     table_1 = pd.read_csv(first_cell_type_expressions_path, index_col=0) # upload first table
     table_2 = pd.read_csv(second_cell_type_expressions_path, index_col=0) # upload second table
 
     # gene name has to be in both tables and the cell type has not to be considered as a gene name
-    gene_names = list(set(table_1.columns).intersection(set(table_2.columns)).difference(set(["Cell_type"])))
+    gene_names = sorted(list(set(table_1.columns).intersection(set(table_2.columns)).difference(set(["Cell_type"]))))
 
-    # list with gene names and ci results
-    ci_results = diffexpr_ci(table_1, table_2, gene_names)
+    # genes expression means for cell type from first table
+    table_1_expressions = expression_means(table_1, gene_names)
 
-    # list with ztest results and ztest p values
-    z_results, z_p_vals = diffexpr_ztest(table_1, table_2, gene_names)
+    # genes expression means for cell type from second table
+    table_2_expressions = expression_means(table_2, gene_names)
 
     # list with difference between means of expressions
     mean_diff = diff_means(table_1, table_2, gene_names)
 
+    ci_results = None
+    if need_ci: # if user wants to see the ci intersection (True/False) in output
+        
+        # list with gene names and ci results
+        ci_results = diffexpr_ci(table_1, table_2, gene_names)
+
+    # list with ztest p values
+    outcome, z_p_vals = diffexpr_ztest(table_1, table_2, gene_names)
+
+    # if p-values multiple comparisons correction is needed 
+    z_p_vals_adjusted = None
+    if need_adj:
+        outcome, z_p_vals_adjusted, _, _ = multipletests(z_p_vals, adj_alpha, adj_method)
+
     # creating of a dataframe
     results = {
         "gene_name": gene_names,
+        "first_cell_type_expression_means": table_1_expressions,
+        "second_cell_type_expressions_means": table_2_expressions,
+        "mean_difference": mean_diff,
         "ci_test_results": ci_results,
-        "z_test_results": z_results,
         "z_test_p_values": z_p_vals,
-        "mean_diff": mean_diff
-    } 
+        f"p_values_adjusted_method_{adj_method}_alpha_{adj_alpha}": z_p_vals_adjusted,
+        "test_outcome": outcome
+    }
 
     results = pd.DataFrame(results)
+    results.dropna(how='all', axis=1, inplace=True) # if ci and multiple test correcrion not chosen, these columns will be deleted
     
     results.to_csv(f"{save_results_table}.csv", index=False)
 
 
+""" List of multiple comparisons p-values adjustment methods """
+FDR_METHODS_ALLOWED = [
+    "bonferroni", 
+    "sidak", 
+    "holm-sidak", 
+    "holm", 
+    "simes-hochberg", 
+    "hommel",
+    "fdr_bh", 
+    "fdr_by",
+    "fdr_tsbh",
+    "fdr_tsbky"
+]
+
+# arguments parsing from command line
 parser = argparse.ArgumentParser(description='Differential expression analysis') # created parser
-parser.add_argument('first_inp', type=str, help='Path to first (control) .csv file') # argument for first table
-parser.add_argument('second_inp', type=str, help='Path to second (experiment) .csv file') # argument for second table
-parser.add_argument('output_name', type=str, help='Results table name') # argument for output
+parser.add_argument('--fi', type=str, help='Path to first (control) .csv file') # argument for first table
+parser.add_argument('--si', type=str, help='Path to second (experiment) .csv file') # argument for second table
+parser.add_argument('--out', type=str, help='Results table name') # argument for output
+parser.add_argument('--ci', action='store_true', dest='ci', help='Do you want to calculate if ci intersect') # flag for ci intersect
+parser.add_argument('--adj', action='store_true', dest='adj', help='Do you want to correct p-velues for multiple comparisons?')
+parser.add_argument('--adj_method', default="bonferroni", choices=FDR_METHODS_ALLOWED, help='Type p-value correction method for multiple comparisons')
+parser.add_argument('--adj_alpha', default=0.05, type=float, help='alpha for multiple comparisons')
+
+if len(sys.argv) < 2: # autimatically will print help if no arguments provided
+    parser.print_help()
+    sys.exit(0)
 args = parser.parse_args()
+
 
 # finally let the script do the work
 diffexpr(
-    first_cell_type_expressions_path=args.first_inp,
-    second_cell_type_expressions_path=args.second_inp,
-    save_results_table=args.output_name
+    first_cell_type_expressions_path=args.fi,
+    second_cell_type_expressions_path=args.si,
+    save_results_table=args.out,
+    need_ci=args.ci,
+    need_adj=args.adj,
+    adj_method=args.adj_method,
+    adj_alpha=args.adj_alpha
 )
