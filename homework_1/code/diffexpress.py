@@ -1,10 +1,11 @@
 import pandas as pd
 import numpy as np
-import scipy.stats as st
-from statsmodels.stats.weightstats import ztest
 import argparse
 import sys
+
+import scipy.stats as st
 from statsmodels.stats.multitest import multipletests
+from statsmodels.stats.weightstats import ztest
 
 
 def check_intervals_intersect(first_ci, second_ci):
